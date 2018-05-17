@@ -44,7 +44,13 @@ func NewTranslator(conf *Configuration) *Translator {
 
 	t.ctx = ctx
 	t.client = c
+
 	return t
+}
+
+// Release client
+func (t *Translator) Release() {
+	t.client.Close()
 }
 
 // SetToken overrides configure token
@@ -57,19 +63,22 @@ func (t *Translator) SetToken(s string) {
 func (t *Translator) Translate(d string) (r string, e error) {
 	target, e := language.Parse("th")
 	if e != nil {
-		log.Fatalf("Cannot parse language: %v", e)
+		// log.Fatalf("Cannot parse language: %v", e)
+		r = "[เจอปัญหาค่ะ] " + e.Error()
 		return
 	}
 
 	langs, e := t.client.DetectLanguage(t.ctx, []string{d})
 	if e != nil {
-		log.Fatalf("Cannot detect language: %v", e)
+		// log.Fatalf("Cannot detect language: %v", e)
+		r = "[เจอปัญหาค่ะ] " + e.Error()
 		return
 	}
 
 	translations, e := t.client.Translate(t.ctx, []string{d}, target, nil)
 	if e != nil {
-		log.Fatalf("Cannot translate: %v", e)
+		// log.Fatalf("Cannot translate: %v", e)
+		r = "[เจอปัญหาค่ะ] " + e.Error()
 		return
 	}
 

@@ -7,16 +7,19 @@ import (
 	"os"
 
 	"github.com/chonla/oddsy"
+	"github.com/chonla/oddsy-bot/tik"
 	"github.com/chonla/oddsy-bot/translator"
 )
 
 var t *translator.Translator
+var tk *tik.Tik
 
 type configuration struct {
-	SlackToken       string `json:"slack-token"`
-	Debug            bool   `json:"debug"`
-	IgnoreBotMessage bool   `json:"ignore-bot-message"`
-	GcpToken         string `json:"gcp-token"`
+	SlackToken        string `json:"slack-token"`
+	Debug             bool   `json:"debug"`
+	IgnoreBotMessage  bool   `json:"ignore-bot-message"`
+	GcpToken          string `json:"gcp-token"`
+	FirebaseProjectID string `json:"firebase-project-id"`
 }
 
 var conf configuration
@@ -36,8 +39,20 @@ func main() {
 	b.FirstStringTokenReceived("ping", pingMessageHandler)
 	b.FirstStringTokenReceived("translate", translateMessageHandler)
 	b.FirstStringTokenReceived("แปล", translateMessageHandler)
+	b.FirstStringTokenReceived("tik", tikMessageHandler)
+
+	defer release()
 
 	b.Start()
+}
+
+func release() {
+	if tk != nil {
+		tk.Release()
+	}
+	if t != nil {
+		t.Release()
+	}
 }
 
 func messageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
@@ -71,6 +86,22 @@ func translateMessageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
 	}
 	r, _ := t.Translate(m.Message)
 	o.Send(m.Channel.UID, "แปลว่า\n```"+r+"```")
+}
+
+func tikMessageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
+	if tk == nil {
+		tk = tik.NewTik(&tik.Configuration{
+			GcpToken:          conf.GcpToken,
+			FirebaseProjectID: conf.FirebaseProjectID,
+		})
+	}
+
+	w, e := tk.Find(m.From.UID)
+	if e != nil {
+		o.Send(m.Channel.UID, "แนะนำตัวหน่อยนะจ๊ะ พิมพ์ว่า `tik i <ชื่อเล่น>` เช่น `tik i เฌอ`")
+	} else {
+		o.Send(m.Channel.UID, "พี่ติ๊กมาแล้วจ้า "+w.Name)
+	}
 }
 
 func loadConfig(filename string, conf *configuration) {
