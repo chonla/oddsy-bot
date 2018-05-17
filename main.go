@@ -1,25 +1,43 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/chonla/oddsy"
 	"github.com/chonla/oddsy-bot/translator"
 )
 
+var t *translator.Translator
+
+type configuration struct {
+	SlackToken       string `json:"slack-token"`
+	Debug            bool   `json:"debug"`
+	IgnoreBotMessage bool   `json:"ignore-bot-message"`
+	GcpToken         string `json:"gcp-token"`
+}
+
+var conf configuration
+
 func main() {
-	oddsy := oddsy.NewOddsy("./oddsy.json")
+	loadConfig("./oddsy.json", &conf)
 
-	slackToken := os.Getenv("SLACK_TOKEN")
-	if slackToken != "" {
-		oddsy.SetToken(slackToken)
-	}
+	b := oddsy.NewOddsy(&oddsy.Configuration{
+		SlackToken:       conf.SlackToken,
+		Debug:            conf.Debug,
+		IgnoreBotMessage: conf.IgnoreBotMessage,
+	})
 
-	oddsy.MessageReceived(messageHandler)
-	oddsy.DirectMessageReceived(directMessageHandler)
+	b.MessageReceived(messageHandler)
+	b.DirectMessageReceived(directMessageHandler)
+	b.FirstStringTokenReceived("help", helpMessageHandler)
+	b.FirstStringTokenReceived("ping", pingMessageHandler)
+	b.FirstStringTokenReceived("translate", translateMessageHandler)
+	b.FirstStringTokenReceived("แปล", translateMessageHandler)
 
-	oddsy.Start()
+	b.Start()
 }
 
 func messageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
@@ -29,29 +47,38 @@ func messageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
 }
 
 func directMessageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
-	// pretty.Println("Direct Message:")
-	// pretty.Println(m)
-	t := strings.ToLower(firstToken(m.Message))
-	switch {
-	case t == "แปล" || t == "translate":
-		t := translator.NewTranslator()
-		r, _ := t.Translate(nextToken(m.Message))
-		o.Send(m.Channel.UID, r)
-	default:
-		o.Send(m.Channel.UID, "มีอะไรให้ช่วยไหมจ๊ะ")
-	}
+	o.Send(m.Channel.UID, "มีอะไรให้ช่วยไหมจ๊ะ")
 }
 
-func firstToken(t string) (r string) {
-	l := strings.SplitN(t, " ", 2)
-	r = l[0]
-	return
+func pingMessageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
+	o.Send(m.Channel.UID, "pong :heart:")
 }
 
-func nextToken(t string) (r string) {
-	l := strings.SplitN(t, " ", 2)
-	if len(l) > 0 {
-		r = l[1]
+func helpMessageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
+	o.Send(m.Channel.UID, "ข้อความที่"+o.Name+" เข้าใจนะจ๊ะ\n```"+`
+ping - ทดสอบ ping/pong
+help - ข้อความนี้แหละจ้ะ
+translate <ข้อความ> - แปลข้อความจากภาษาอื่นเป็นภาษาไทย
+แปล <ข้อความ> - เหมือน translate
+tik - ลง worksheet`+"```")
+}
+
+func translateMessageHandler(o *oddsy.Oddsy, m *oddsy.Message) {
+	if t == nil {
+		t = translator.NewTranslator(&translator.Configuration{
+			GcpToken: conf.GcpToken,
+		})
 	}
-	return
+	r, _ := t.Translate(m.Message)
+	o.Send(m.Channel.UID, "แปลว่า\n```"+r+"```")
+}
+
+func loadConfig(filename string, conf *configuration) {
+	t, e := ioutil.ReadFile(filename)
+	if e != nil {
+		fmt.Println(e.Error())
+		os.Exit(1)
+	}
+
+	json.Unmarshal(t, conf)
 }
